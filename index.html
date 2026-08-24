@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>포커스 타이머</title>
+<style>
+  :root {
+    --bg: #101014;
+    --card: #17171d;
+    --accent: #ff6b4a;
+    --accent-dim: #4a3a35;
+    --text: #f0ede8;
+    --text-dim: #8a8a92;
+    --border: #2a2a32;
+    --done: #4ade80;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, "Segoe UI", "Malgun Gothic", sans-serif;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  .app {
+    width: 100%;
+    max-width: 420px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  .timer-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 32px 24px;
+    text-align: center;
+  }
+  .mode-switch {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    margin-bottom: 20px;
+  }
+  .mode-switch button {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    padding: 6px 14px;
+    border-radius: 999px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all .15s;
+  }
+  .mode-switch button.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #1a0f0a;
+    font-weight: 600;
+  }
+  .ring-wrap { position: relative; width: 220px; height: 220px; margin: 0 auto 20px; }
+  svg { transform: rotate(-90deg); }
+  .ring-bg { fill: none; stroke: var(--border); stroke-width: 10; }
+  .ring-fg { fill: none; stroke: var(--accent); stroke-width: 10; stroke-linecap: round; transition: stroke-dashoffset .3s linear; }
+  .time-display {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 44px;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+  }
+  .controls { display: flex; gap: 10px; justify-content: center; }
+  .controls button {
+    border: none;
+    border-radius: 12px;
+    padding: 10px 22px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform .1s;
+  }
+  .controls button:active { transform: scale(0.96); }
+  #startBtn { background: var(--accent); color: #1a0f0a; }
+  #resetBtn { background: var(--border); color: var(--text); }
+  .session-count { color: var(--text-dim); font-size: 13px; margin-top: 14px; }
+  .task-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 20px;
+  }
+  .task-card h2 { font-size: 15px; margin-bottom: 12px; color: var(--text-dim); font-weight: 600; }
+  .task-input-row { display: flex; gap: 8px; margin-bottom: 14px; }
+  .task-input-row input {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 10px 12px;
+    border-radius: 10px;
+    font-size: 14px;
+  }
+  .task-input-row input:focus { outline: none; border-color: var(--accent); }
+  .task-input-row button {
+    background: var(--border);
+    border: none;
+    color: var(--text);
+    padding: 0 16px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 18px;
+  }
+  ul#taskList { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+  ul#taskList li {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: var(--bg);
+    font-size: 14px;
+  }
+  ul#taskList li .check {
+    width: 18px; height: 18px;
+    border: 2px solid var(--text-dim);
+    border-radius: 6px;
+    cursor: pointer;
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+  }
+  ul#taskList li.done .check { background: var(--done); border-color: var(--done); }
+  ul#taskList li.done span.label { text-decoration: line-through; color: var(--text-dim); }
+  ul#taskList li span.label { flex: 1; cursor: pointer; }
+  ul#taskList li .del { color: var(--text-dim); cursor: pointer; font-size: 16px; padding: 0 4px; }
+  ul#taskList li .del:hover { color: var(--accent); }
+  .empty { color: var(--text-dim); font-size: 13px; text-align: center; padding: 12px 0; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="timer-card">
+    <div class="mode-switch">
+      <button data-mins="25" class="active">집중 25</button>
+      <button data-mins="5">짧은 휴식 5</button>
+      <button data-mins="15">긴 휴식 15</button>
+    </div>
+    <div class="ring-wrap">
+      <svg width="220" height="220">
+        <circle class="ring-bg" cx="110" cy="110" r="98"></circle>
+        <circle id="ringFg" class="ring-fg" cx="110" cy="110" r="98"></circle>
+      </svg>
+      <div class="time-display" id="timeDisplay">25:00</div>
+    </div>
+    <div class="controls">
+      <button id="startBtn">시작</button>
+      <button id="resetBtn">초기화</button>
+    </div>
+    <div class="session-count" id="sessionCount">오늘 완료한 집중 세션: 0</div>
+  </div>
+
+  <div class="task-card">
+    <h2>할 일</h2>
+    <div class="task-input-row">
+      <input id="taskInput" type="text" placeholder="할 일을 입력하고 Enter" maxlength="80">
+      <button id="addBtn">+</button>
+    </div>
+    <ul id="taskList"></ul>
+  </div>
+</div>
+
+<script>
+(function () {
+  const RADIUS = 98;
+  const CIRC = 2 * Math.PI * RADIUS;
+  const ringFg = document.getElementById('ringFg');
+  ringFg.style.strokeDasharray = CIRC;
+  ringFg.style.strokeDashoffset = 0;
+
+  const timeDisplay = document.getElementById('timeDisplay');
+  const startBtn = document.getElementById('startBtn');
+  const resetBtn = document.getElementById('resetBtn');
+  const sessionCountEl = document.getElementById('sessionCount');
+  const modeBtns = document.querySelectorAll('.mode-switch button');
+
+  let totalSeconds = 25 * 60;
+  let remaining = totalSeconds;
+  let timerId = null;
+  let running = false;
+  let currentMode = 25;
+
+  const today = new Date().toISOString().slice(0, 10);
+  const sKey = 'focusTimer.sessions.' + today;
+  let sessions = parseInt(localStorage.getItem(sKey) || '0', 10);
+  sessionCountEl.textContent = `오늘 완료한 집중 세션: ${sessions}`;
+
+  function fmt(s) {
+    const m = Math.floor(s / 60).toString().padStart(2, '0');
+    const sec = (s % 60).toString().padStart(2, '0');
+    return `${m}:${sec}`;
+  }
+
+  function render() {
+    timeDisplay.textContent = fmt(remaining);
+    const progress = 1 - remaining / totalSeconds;
+    ringFg.style.strokeDashoffset = CIRC * (1 - progress);
+  }
+
+  function tick() {
+    remaining--;
+    if (remaining <= 0) {
+      clearInterval(timerId);
+      running = false;
+      startBtn.textContent = '시작';
+      if (currentMode === 25) {
+        sessions++;
+        localStorage.setItem(sKey, sessions);
+        sessionCountEl.textContent = `오늘 완료한 집중 세션: ${sessions}`;
+      }
+      document.title = '⏰ 시간 종료! — 포커스 타이머';
+      render();
+      return;
+    }
+    render();
+  }
+
+  startBtn.addEventListener('click', () => {
+    if (running) {
+      clearInterval(timerId);
+      running = false;
+      startBtn.textContent = '시작';
+    } else {
+      running = true;
+      startBtn.textContent = '일시정지';
+      document.title = '포커스 타이머';
+      timerId = setInterval(tick, 1000);
+    }
+  });
+
+  resetBtn.addEventListener('click', () => {
+    clearInterval(timerId);
+    running = false;
+    startBtn.textContent = '시작';
+    remaining = totalSeconds;
+    render();
+  });
+
+  modeBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      modeBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentMode = parseInt(btn.dataset.mins, 10);
+      totalSeconds = currentMode * 60;
+      remaining = totalSeconds;
+      clearInterval(timerId);
+      running = false;
+      startBtn.textContent = '시작';
+      render();
+    });
+  });
+
+  render();
+
+  // --- Tasks ---
+  const taskInput = document.getElementById('taskInput');
+  const addBtn = document.getElementById('addBtn');
+  const taskList = document.getElementById('taskList');
+  const tKey = 'focusTimer.tasks';
+  let tasks = JSON.parse(localStorage.getItem(tKey) || '[]');
+
+  function saveTasks() {
+    localStorage.setItem(tKey, JSON.stringify(tasks));
+  }
+
+  function renderTasks() {
+    taskList.innerHTML = '';
+    if (tasks.length === 0) {
+      const li = document.createElement('li');
+      li.className = 'empty';
+      li.textContent = '아직 할 일이 없습니다.';
+      li.style.background = 'transparent';
+      taskList.appendChild(li);
+      return;
+    }
+    tasks.forEach((t, i) => {
+      const li = document.createElement('li');
+      if (t.done) li.classList.add('done');
+      const check = document.createElement('div');
+      check.className = 'check';
+      check.textContent = t.done ? '✓' : '';
+      check.style.color = '#1a0f0a';
+      check.style.fontSize = '12px';
+      check.addEventListener('click', () => {
+        tasks[i].done = !tasks[i].done;
+        saveTasks();
+        renderTasks();
+      });
+      const label = document.createElement('span');
+      label.className = 'label';
+      label.textContent = t.text;
+      label.addEventListener('click', () => {
+        tasks[i].done = !tasks[i].done;
+        saveTasks();
+        renderTasks();
+      });
+      const del = document.createElement('span');
+      del.className = 'del';
+      del.textContent = '✕';
+      del.addEventListener('click', () => {
+        tasks.splice(i, 1);
+        saveTasks();
+        renderTasks();
+      });
+      li.appendChild(check);
+      li.appendChild(label);
+      li.appendChild(del);
+      taskList.appendChild(li);
+    });
+  }
+
+  function addTask() {
+    const val = taskInput.value.trim();
+    if (!val) return;
+    tasks.push({ text: val, done: false });
+    taskInput.value = '';
+    saveTasks();
+    renderTasks();
+  }
+
+  addBtn.addEventListener('click', addTask);
+  taskInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') addTask();
+  });
+
+  renderTasks();
+})();
+</script>
+</body>
+</html>
